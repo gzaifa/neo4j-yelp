@@ -67,6 +67,86 @@ For a start, I am interested in the following fields:
 * friends: // array of strings, an array of the user's friend as user_ids
 * average_stars: float, average rating of all reviews
 
+### Importing data, creating relationships
+A first pass of the fields available and using the arrows.app tool to create our first graph model.
+![image](https://user-images.githubusercontent.com/830693/126449058-4722a6da-3431-4902-b483-1c157f7a0b7d.png)
 
-  
+Looking at this graph, I think some of the following questions can be answered (if not, we might need to refactor the graph model in a later iteration):
+* How many restaurants are there?
+* What is the average number of reviews that a restaurant has?
+* What is the average number of reviews that each user gave?
+The preceding questions looks like they would have been better answered using a traditional database, or even another NoSQL database.
+The power of a labelled property graph database lies in traversing the relationships of the graph, and some of the following questions might take advantage of that:
+* On average, how many friends does each user have?
+* Do restaurants tend to get a higher/lower review from people who are friends?
 	
+Let's try to import "Business" and "User" datasets into our database.  
+Let's see how many records there are in the datasets:
+<pre>CALL apoc.load.json($yelp_business_file) YIELD value
+RETURN count(value);
+CALL apoc.load.json($yelp_user_file) YIELD value
+RETURN count(value)</pre>
+User: 2,189,457
+Business: 160,585
+
+Both apoc.load.json and "LOAD CSV" are single-threaded commands, so the loading might be able to be sped up using parallel processing with *apoc.periodis.iterate*.  
+The general construct of the command is:  
+<pre>WITH 'call apoc.load.json("/yelp/yelp_dataset/yelp_academic_dataset_user.json") YIELD value RETURN value' AS load_json
+CALL apoc.periodic.iterate(load_json, 'WITH value 
+CREATE (u:User) SET
+    u.user_id= value.user_id,
+	u.name = coalesce(value.name),
+	u.review_count = value.review_count,
+	u.average_stars = value.average_stars',
+{batchSize: 5000, parallel: True, iterateList: True, retries:3}) 
+YIELD batches, total
+RETURN *
+</pre>
+The above command took 48709ms (around 49seconds) to run on my desktop with exactly 2,189,457 nodes created:
+![image](https://user-images.githubusercontent.com/830693/126462080-da955ee7-d904-4f45-b513-44a7b1bd4ec3.png)
+
+NOTE: Initially the command just ended without any error message but no nodes were created. To investigate further, look at the Neo4j's log files located at (you guessed it...) Manage->Open Folder->Logs.  
+I found the problem under neo4j.log. There was extra curly brackets around {value} which were not required (cryptic error message was: 
+<pre>The old parameter syntax `{param}` is no longer supported. Please use `$param` instead (line 1, column 59 (offset: 58))
+"UNWIND $_batch AS _batch WITH _batch.value AS value  WITH {value}"</pre>
+
+We will have to go through the user file for a second time to create the FRIEND_OF relationship between all the user nodes.
+<pre>WITH 'call apoc.load.json("/yelp/yelp_dataset/yelp_academic_dataset_user.json") YIELD value RETURN value' AS load_json
+CALL apoc.periodic.iterate(load_json, 'WITH value 
+MATCH (u:User {user_id:value.user_id}) 
+WITH u,value.friends as friends
+UNWIND friends as friend
+MERGE (u1:User{user_id:friend})
+MERGE (u)-[:FRIEND_OF]-(u1)',
+{batchSize: 1000, parallel: True, iterateList: True, retries:3}) 
+YIELD batches, total
+RETURN *
+
+</pre>
+NOTE: The above had trouble running to completion, after running for > 3hrs, only 18,000 relationships had been created and it was all 1-1 relationships, i.e., no single node had more than one friend as the following return 0 rows:
+<pre>MATCH (p1:User)-[r:FRIEND_OF]-(p2:User)
+WITH p1, count(r) as num_friends
+WHERE num_friends > 1
+RETURN p1,p2
+</pre>
+
+<pre>
+CALL apoc.periodic.iterate("
+CALL apoc.load.json('/yelp/yelp_dataset/yelp_academic_dataset_user.json')
+YIELD value RETURN value
+","
+MERGE (u:User{id:value.user_id})
+SET u += apoc.map.clean(value, ['friends','user_id'],[0]),u.name = coalesce(value.name),
+	u.review_count = value.review_count,
+	u.average_stars = value.average_stars
+WITH u,value.friends as friends
+UNWIND friends as friend
+MERGE (u1:User{id:friend})
+MERGE (u)-[:FRIEND_OF]-(u1)
+",{batchSize: 100, iterateList: true});
+</pre>
+
+
+
+
+
