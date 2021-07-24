@@ -146,6 +146,10 @@ MERGE (u)-[:FRIEND_OF]-(u1)
 ",{batchSize: 100, iterateList: true});
 </pre>
 
+![image](https://user-images.githubusercontent.com/830693/126593085-1ac75a36-69ac-4e20-a526-25bbeb045680.png)
+![image](https://user-images.githubusercontent.com/830693/126593106-1250e32d-dd9c-4e19-ae3f-3c32a074c2dd.png)
+
+![image](https://user-images.githubusercontent.com/830693/126593762-35bbeba9-830d-449c-b7b9-6f0d7d6d832a.png)
 
 
 
