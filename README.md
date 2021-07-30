@@ -77,8 +77,9 @@ Looking at this graph, I think some of the following questions can be answered (
 * What is the average number of reviews that each user gave?
 The preceding questions looks like they would have been better answered using a traditional database, or even another NoSQL database.
 The power of a labelled property graph database lies in traversing the relationships of the graph, and some of the following questions might take advantage of that:
-* On average, how many friends does each user have?
-* Do restaurants tend to get a higher/lower review from people who are friends?
+* Find communities within the graph
+* Find the important nodes (users) within the communities (Top 10)
+* Find important intermediaries between communities (users that connects different communities)
 	
 Let's try to import "Business" and "User" datasets into our database.  
 Let's see how many records there are in the datasets:
@@ -111,6 +112,8 @@ I found the problem under neo4j.log. There was extra curly brackets around {valu
 "UNWIND $_batch AS _batch WITH _batch.value AS value  WITH {value}"</pre>
 
 We will have to go through the user file for a second time to create the FRIEND_OF relationship between all the user nodes.
+In order to make it run faster, create an index on user_id
+<pre>CREATE CONSTRAINT ConstraintUniqueUserId ON (p:USER) ASSERT p.user_id IS UNIQUE</pre>
 <pre>WITH 'call apoc.load.json("/yelp/yelp_dataset/yelp_academic_dataset_user.json") YIELD value RETURN value' AS load_json
 CALL apoc.periodic.iterate(load_json, 'WITH value 
 MATCH (u:User {user_id:value.user_id}) 
@@ -121,7 +124,6 @@ MERGE (u)-[:FRIEND_OF]-(u1)',
 {batchSize: 1000, parallel: True, iterateList: True, retries:3}) 
 YIELD batches, total
 RETURN *
-
 </pre>
 NOTE: The above had trouble running to completion, after running for > 3hrs, only 18,000 relationships had been created and it was all 1-1 relationships, i.e., no single node had more than one friend as the following return 0 rows:
 <pre>MATCH (p1:User)-[r:FRIEND_OF]-(p2:User)
@@ -146,11 +148,12 @@ MERGE (u)-[:FRIEND_OF]-(u1)
 ",{batchSize: 100, iterateList: true});
 </pre>
 
-![image](https://user-images.githubusercontent.com/830693/126593085-1ac75a36-69ac-4e20-a526-25bbeb045680.png)
-![image](https://user-images.githubusercontent.com/830693/126593106-1250e32d-dd9c-4e19-ae3f-3c32a074c2dd.png)
-
-![image](https://user-images.githubusercontent.com/830693/126593762-35bbeba9-830d-449c-b7b9-6f0d7d6d832a.png)
+Madness!!! Am I really seeing 4,793,726,333,764 estimated rows?
 
 
-
+Processing this line of 2 friends is successful with two relationships being created:
+<pre>{"user_id":"cojecOwQJpsYDxnjtgzteQ","name":"Steven","review_count":51,"yelping_since":"2010-07-04 17:18:40","useful":136,"funny":47,"cool":44,"elite":"2010,2011","friends":"pezqbtp3BHiRUGG_Bm5_ug,wpuR1jPNjmdMEK8kXipYmQ","fans":4,"average_stars":3.79,"compliment_hot":4,"compliment_more":5,"compliment_profile":2,"compliment_cute":1,"compliment_list":0,"compliment_note":4,"compliment_plain":6,"compliment_cool":12,"compliment_funny":12,"compliment_writer":4,"compliment_photos":2}</pre>
+However, increasing the number of friends in the the array results in no relationships being created:
+<pre>{"user_id":"cojecOwQJpsYDxnjtgzteQ","name":"Steven","review_count":51,"yelping_since":"2010-07-04 17:18:40","useful":136,"funny":47,"cool":44,"elite":"2010,2011","friends":"_Tpd51CSlnOyvDTpOtgG5w, jVYzrVblDFSuL3GHtt8ZSA, VH18dyRNF2zrJly76eMppQ, qnYw6KaUiO4nFdfBhxqtKw, Mntyg_rQ9wgSF36wVW4asA, aUhcscNphAJQlZe1R_WRow, DVFtg_fc2FlOyOcx1Go6LQ, dboAKYo-6jWm0QkoU4Gw_A, hZMR_sCpKgrS65G3w2ufiA, 9BoPpMPWLG0xPQ1w6SDwPQ, BlYS4iE1imr8uHZUI04DPw, _rbJiH3hh_Csf_ERzSGFhA, Er1zMjQX2WxhgLWvq3LyIQ, E3dfnSs-DAQCw4Qf7J6zGg, KBZsToaFJmNMerS8gFC7Gw, pezqbtp3BHiRUGG_Bm5_ug, rdN5-4o2cqK2zC37sWSjkA, MuLxtrBiNIt0fPfQ3vM5ZQ, bn3mL61VLF_OhTYOGPb3pg, NeThj2YLGWSdlVQ-6Lk1Zw, swN__VyeFg6O_BFR0x5ZeA, GYMIDghm2k7gSTpyKNid1Q, a3H38cSs0qFsp11uRFx-ag, kJYS_6m7tYKGZLDRQv9uKg, 69GcN45awmlCq_RbLWd9uw, C2wI0o8n_CehtjafAiv7og, 6URZKBI8tRaztdo4eqMRew, s0pkzHUflmrarGSWP1G9gg, _CKhWiEVD6Xni44q4eelGw, QCNLvK6xxebYoItPU49-Og, r1nxWgnYj0WT3eY2dAsLfA, e3uXoS2ACM0ABD_uC2te9Q, v9HPVo-cqGEQ2gYSAbGnzQ, 2j-EXRubkWMhnqq6_rL-fg, jd3zDm_qigq0Ni5l_WOeLQ, aV_d1Ql5dhpTBFmiN2vkcg, UaFrZ5obw9q1XAFF6_QsBA, 17XthUbE3VBxFfKmBuV5zA, F_kM1y9821efOrLI7x0cOw, IBevAvzgKSZm-ADAkWjXFg, 0dGi59C6bWFAzrhUjm_cKQ, vV6eQMXV6jTI3b8sf1hlzA, 7luj-qkZxPaeiXUndtQSRg, RUbi_o_PihlKZaMxPwJnmQ, BmGKtjhYkFvMR13-RubrOQ, tJZmmVGVHaMqfXr-tx5w-w, aNb7imBYruQZbAqNWTFD7w, w0OabwDAGFWnWBA0w2KAFA, WvDwS_KRAQPuKNYsCdlbaw, 6dtE2xvLX32eOHEeFTBiqA, wpuR1jPNjmdMEK8kXipYmQ","fans":4,"average_stars":3.79,"compliment_hot":4,"compliment_more":5,"compliment_profile":2,"compliment_cute":1,"compliment_list":0,"compliment_note":4,"compliment_plain":6,"compliment_cool":12,"compliment_funny":12,"compliment_writer":4,"compliment_photos":2}
+</pre>
 
