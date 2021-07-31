@@ -242,3 +242,124 @@ Of the algorithms in the Centrality category, [PageRank](https://neo4j.com/docs/
 * Scales well, roughly O(log n) where n is the size of the network
 * *tolerance* (defaulted 0.0000001) configuration parameter denotes the minimum change in scores between iterations
 * Defined for directed (NATURAL) graphs (*orientation*: NATURAL, REVERSE, UNDIRECTED)
+
+Generate the PageRank score for each node:
+<pre>UNWIND [20, 30, 40] AS numIter
+CALL gds.pageRank.write({
+    nodeProjection: 'User',
+    relationshipProjection: {
+        FRIEND_OF: {
+            type: 'FRIENDS',
+            orientation: 'UNDIRECTED'
+        }
+    },
+    writeProperty: 'pageRank' + toString(numIter),
+    maxIterations: numIter
+})
+YIELD ranIterations, didConverge, createMillis, computeMillis, writeMillis, nodePropertiesWritten, centralityDistribution, configuration
+RETURN numIter, ranIterations, didConverge, createMillis, computeMillis, writeMillis, nodePropertiesWritten, centralityDistribution, configuration</pre>
+  
+|"numIter"|"ranIterations"|"didConverge"|"createMillis"|"computeMillis"|"writeMillis"|"nodePropertiesWritten"|
+|:---|---:|---:|---:|---:|---:|---:|
+|20       |20             |false        |3241          |3873           |7874         |2189457                |
+|30       |30             |false        |2525          |7109           |6886         |2189457                |
+|40       |40             |false        |1665          |7424           |5175         |2189457                |
+
+<table>
+<tr>
+<th>"numIter"</th>
+<th>centralityDistribution</th>
+</tr>
+<tr>
+<td>20</td>
+<td>{
+  "p1": 0.14999961853027344,</br>
+  "max": 260.4687490463257,</br>
+  "p5": 0.14999961853027344,</br>
+  "p90": 1.1614675521850586,</br>
+  "p50": 0.14999961853027344,</br>
+  "p95": 1.8240423202514648,</br>
+  "p10": 0.14999961853027344,</br>
+  "p75": 0.5108137130737305,</br>
+  "p99": 4.223540306091309,</br>
+  "p25": 0.14999961853027344,</br>
+  "p100": 260.4687490463257,</br>
+  "min": 0.14999961853027344,</br>
+  "mean": 0.5352733978808337,</br>
+  "stdDev": 1.6442461380875133</br>
+}
+</td>
+</tr>
+<tr>
+<td>30</td>
+<td>{
+  "p1": 0.14999961853027344,</br>
+  "max": 265.4628896713257,</br>
+  "p5": 0.14999961853027344,</br>
+  "p90": 1.1914434432983398,</br>
+  "p50": 0.14999961853027344,</br>
+  "p95": 1.8777074813842773,</br>
+  "p10": 0.14999961853027344,</br>
+  "p75": 0.5193052291870117,</br>
+  "p99": 4.371397972106934,</br>
+  "p25": 0.14999961853027344,</br>
+  "p100": 265.4628896713257,</br>
+  "min": 0.14999961853027344,</br>
+  "mean": 0.5477500813741137,</br>
+  "stdDev": 1.7068092756877828</br>
+}
+</td>
+</tr>
+<tr>
+<td>20</td>
+<td>{
+  "p1": 0.14999961853027344,</br>
+  "max": 266.4257802963257,</br>
+  "p5": 0.14999961853027344,</br>
+  "p90": 1.197310447692871,</br>
+  "p50": 0.14999961853027344,</br>
+  "p95": 1.8883047103881836,</br>
+  "p10": 0.14999961853027344,</br>
+  "p75": 0.5209493637084961,</br>
+  "p99": 4.400237083435059,</br>
+  "p25": 0.14999961853027344,</br>
+  "p100": 266.4257802963257,</br>
+  "min": 0.14999961853027344,</br>
+  "mean": 0.550206431214031,</br>
+  "stdDev": 1.7192745702237355</br>
+}
+</td>
+</tr>
+<tr>
+</tr>
+</table>
+  
+The distribution seems to be relatively stable for the different iterations ran.  
+Find the most important nodes (users):
+<pre>MATCH (u:User)
+RETURN u.user_id, u.name, u.pageRank20, u.betweeness109, u.lcc109
+ORDER BY u.pageRank20 DESC LIMIT 20</pre>
+  
+
+|"u.user_id"               |"u.name"   |"u.pageRank20"    |"u.betweeness109" |"u.lcc109"           |
+|:---|---:|---:|---:|---:|---:|---:|
+|"u-ckG7-tdMfxiukdA4jEnE1Q"|"Issabelle"|260.46788326613614|530819.3606627139 |0.006674454947525701 |
+|"u-qVc8ODYU5SZjKXVBgXdI7w"|"Walker"   |236.46832053959372|709537.6545891687 |0.0032328578869789764|
+|"u-hdzTAN8DGJKRddkZ8279JQ"|"Andi"     |226.6290947455913 |575625.2812810297 |0.007663471660200081 |
+|"u-_NpJZ0q8KVI-d2YLL_VpCA"|"Jayme"    |214.6310708640143 |332330.4350181412 |0.005184093716421638 |
+|"u-DOj9NanlJP3xntULCy5Uow"|"Chris"    |209.52216092795135|1021469.362654937 |0.007124934706063567 |
+|"u-Oi1qbcz2m2SnwUeztGYcnQ"|"Steven"   |207.9765872254968 |2092010.8010382573|0.014583423076526433 |
+|"u-f1MFQxTZAWJnRQdrouLg_A"|"Matt"     |203.67942263633014|834674.5418388057 |0.01012423548077502  |
+|"u-I2XEhv9zBeAJcwYIrnMf1g"|"Matt"     |199.2908848822117 |262183.9550092841 |0.007961728195372962 |
+|"u-pnTiEaqM4slogpY97n9Kvg"|"Jonathan" |187.17403576858345|591509.0245789832 |0.01103725020056407  |
+|"u-rcU7ysY41qGppbw4pQgjqg"|"Damien"   |174.441122539714  |1123794.0405309324|0.012213785859812965 |
+|"u-tDYysNkQGmEm1iJONRfruw"|"Alejandra"|173.66525547243657|126773.84656706425|0.0020181624421907107|
+|"u-hizGc5W1tBHPghM5YKCAtg"|"Katie"    |172.92671057879926|1279144.7137138925|0.010889296154394473 |
+|"u-mGHP3esQQqCEicHLRV-g5Q"|"Cara"     |166.88000118285416|484676.4203181418 |0.0009219759218467533|
+|"u-NfU0zDaTMEQ4-X9dbQWd9A"|"Cara"     |163.11558457463985|312520.4565724689 |0.011476874756955238 |
+|"u-OA-eps0MDNwnaThISWu-rw"|"Anna"     |157.3488865233958 |122827.94597551331|0.0025493875050666783|
+|"u-wSByVbwME4MzgkJaFyfvNg"|"Bryant"   |151.88011895231904|432913.6251272735 |0.012346295984150392 |
+|"u-mV4lknblF-zOKSF8nlGqDA"|"Scott"    |151.4510991290212 |240740.14771033142|0.007511310236926898 |
+|"u-Ymi6SLVPnCkSxUh6dcOq9Q"|"Kellie"   |149.2554573792964 |341550.94939860643|0.01085379801567745  |
+|"u-tgeFUChlh7v8bZFVl2-hjQ"|"Steve"    |148.74780438542365|313416.72436480166|0.01115468621977514  |
+|"u-iLjMdZi0Tm7DQxX1C1_2dg"|"Ruggy"    |147.31913893371825|570950.3004874    |0.013639794317114358 |
