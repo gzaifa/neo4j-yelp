@@ -17,6 +17,8 @@ Some scenarios which I want to run with gds:
 <li>Find in-between nodes(users) which acts as the "bridge" between different communities</li>
 </ol>
 
+A thing to note is that "the graph algorithms library operates completely on the heap, which means we’ll need to configure our Neo4j Server with a much larger heap size than we would for transactional workloads." [link](https://neo4j.com/docs/graph-data-science/current/common-usage/memory-estimation/#memory-estimation)
+
 ## Find communities within the graph  
 What are the properties that we want in a community:  
 * Many edges connecting vertices within a community  
@@ -53,7 +55,7 @@ ORDER BY num DESC LIMIT 10</pre>
 | 153377          |5      |
 | 108051          |5      |
   
-There is a set with 1,018,074 users (around half the size of the original graph) with very many small sets (6 nodes and below). We will concentrate on this set with component_id 109. Create a named graph for use in subsequent query/analysis using:
+There is a set with 1,018,074 users (around half the size of the original graph) with very many other small sets (6 nodes and below). We will concentrate on this set with component_id 109. Create a named graph for use in subsequent query/analysis:
 <pre>CALL gds.graph.create.cypher(
     'com109Graph',
     'MATCH (u:User) WHERE u.component_id = 109 RETURN id(u) AS id',
@@ -119,7 +121,7 @@ In the next run, we introduce the parameter "concurrency: 1":
 |0.000000001     |39374          |4          |174             |0.6550125845628862|  
   
 The same result was gotten from multiple runs.
-With a concurrency of 1, the processing time is increased by 2-3 times, but we get stable results. Modularity is maxed out at 0.6550125845628862 with 174 communities formed and tolerance level starting at 0.00001.
+With a concurrency of 1, the processing time is increased by 2-3 times, but we get stable results. Modularity is maxed out at 0.6550125845628862 with 174 communities formed starting from tolerance level at 0.00001.
 
 Using concurreny: 1 and tolerance: 0.00001, the top communities were:
 <pre>MATCH (u:User)
@@ -158,7 +160,9 @@ ORDER BY reviews DESC LIMIT 10</pre>
 |"Newton-Massachusetts-US"       |19656    |
 |"Waltham-Massachusetts-US"      |19362    |  
   
-We can see that this community is all located in the state of Massachusetts. Running the same query on community_id 886297 shows that it is all located in Texas.
+We can see that this community's reviews are mostly on businesses located in the state of Massachusetts. Running the same query on community_id 886297 shows the location of Texas. We can infer the locations of the users based on the location of the businesses that they reviewed (however, there is no way to verify this against the user's actual addresses as that information is not part of the dataset).
+  
+Conclusion: From the "FRIENDS" relationship, we have managed to find communities in the network. These communities are largely grouped by geographical locations (inferred).
 
 ### Triangle and Local Clustering Coefficient
 A [Triangle](https://neo4j.com/docs/graph-data-science/current/algorithms/triangle-count/) is a set of three nodes where each node has a relationship to the other two.  
@@ -210,7 +214,7 @@ ORDER BY u.triangleCount109 DESC, u.lcc109 DESC LIMIT 10</pre>
 |"Marianne" |184200              |0.033574368867482954|
   
 This tells us that the top users are friends with alot of other users, but their friends might not necessarily know each other.
-Closed knitted communities can be found with high local clustering coefficient (these users are probably more likely to hang out in a group as all of them know each other):
+Close-knitted communities can be found with high local clustering coefficient (these users are probably more likely to hang out in a group as all of them know each other):
 <pre>MATCH (u:User) 
 WHERE u.component_id = 109 AND u.triangleCount109 > 10
 RETURN u.name,u.triangleCount109, u.lcc109 
