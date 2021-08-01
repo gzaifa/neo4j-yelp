@@ -1,159 +1,370 @@
-# neo4j-yelp Data Modelling and Processing
-Use Neo4J (a labelled graph database) to explore yelp data to see if any insights can be found.
+# Neo4j's Graph Data Science (gds) library  
+Neo4j's gds library contains graph algorithms which are divided into categories which represent different problem classes.  
+| Category      | Description | Algorithms    |
+| :---        |    :----   | :---- |
+| Centrality      | Are used to determine the importance of distinct nodes in a network.       | Page Rank, Article Rank, Eigenvector Centrality, Betweeness Centrality, Degree Centrality   |
+| Community Detection   | Are used to evaluate how groups of nodes are clustered or partitioned, as well as their tendency to strengthen or break apart.         | Louvain, Label Propagation, Weakly Connected Components, Triangle Count, Local Clustering Coefficient      |
+| Path finding       | Are used to find the shortest path between two or more nodes or evaluate the availability and quality of paths. | Dijkstra Source-Target, Dijkstra Single-Source, A*, Yen’s algorithm |
+| Similarity | Are used to compute the similarity of pairs of different vector-based metrics.  | Node similarity,K-Nearest Neighbors  |
 
-Neo4j lists, as best practice, the following steps to designing the initial data model, highlighting that it is an iterative process.
+Ensure that the Graph Data Science Library is installed. It can be found under *Plugins* (which is activated by clicking on the database name, e.g. "Movie DBMS..." in my case).
+![image](https://user-images.githubusercontent.com/830693/127670097-0c59aca4-7d29-493e-b198-daa52caa0d68.png)  
+
+Some scenarios which I want to run with gds:
 <ol>
-<li>Understand the domain.</li>
-<li>Create high-level sample data.</li>
-<li>Define specific questions for the application.</li>
-<li>Identify entities.</li>
-<li>Identify connections between entities.</li>
-<li>Test the questions against the model.</li>
-<li>Test scalability.</li>
+<li>Find communities within the graph</li>
+<li>For these communities (or one of the communities), find the top 10 important nodes(users)</li>
+<li>Find in-between nodes(users) which acts as the "bridge" between different communities</li>
 </ol>
 
-## Setting up files for local processing
-yelp's dataset comprises of 5 json files:
-<ol>
-<li> yelp_academic_dataset_business.json</li>
-<li> yelp_academic_dataset_checkin.json</li>
-<li> yelp_academic_dataset_review.json</li>
-<li> yelp_academic_dataset_tip.json</li>
-<li> yelp_academic_dataset_user.json</li>
-</ol>
+A thing to note is that "the graph algorithms library operates completely on the heap, which means we’ll need to configure our Neo4j Server with a much larger heap size than we would for transactional workloads." [link](https://neo4j.com/docs/graph-data-science/current/common-usage/memory-estimation/#memory-estimation)
 
-To make processing of the files easier, I have downloaded them from [yelp](https://www.yelp.com/dataset/download) to my local file system.
+## Find communities within the graph  
+What are the properties that we want in a community:  
+* Many edges connecting vertices within a community  
+* More connections internally then externally
+ 
+As there are 2,189,457 users and 17,971,548 "FRIENDS" relationships in the graph, we might want to drill down to smaller graphs before running some of the more compute intensive algorithms (for e.g. Triangle with O(n * m) time, where n is the number of nodes and m the number of relationships in the graph).  
+We can use the [weakly connected components](https://neo4j.com/docs/graph-data-science/current/algorithms/wcc/) algorithm to separate out the "islands", as it finds sets of nodes where the same set forms a connected component. Read about connected, weakly connected, and strongly connected [here](https://en.wikipedia.org/wiki/Connectivity_(graph_theory)).
+<pre>CALL gds.wcc.write({
+    nodeProjection: 'User',
+    relationshipProjection: {
+        FRIENDS_OF: {
+            type: 'FRIENDS',
+            orientation: 'UNDIRECTED'
+        }
+    },
+    writeProperty: 'component_id'
+})</pre>
+In the procedure above, the property "component_id" is written to "Users" nodes. It completed relatively fast in 10061ms, finding 1,163,895 components.  
+Query the top 10 sets of components using:
+<pre>MATCH (u:User) 
+RETURN u.component_id, count(*) AS num 
+ORDER BY num DESC LIMIT 10</pre>
 
-In order to use the files from Neo4j desktop, they need to be placed in the imports folder. To find out where the import folder on your local drive is, go to Manage->Open Folder->Import
-<br>
-![image](https://user-images.githubusercontent.com/830693/126421255-a390bef3-481e-4fc8-b6c5-c22a97c3e75d.png)
-
-This will open the import folder in a new window. To access the files from Neo4j desktop command line, you will have to enable local file import in the neo4j.conf file.  
-Similarly, to access this file, go to Manage->Open Folder-> Configurations.  
-Open the "neo4j.conf" file in your favorite editor and add the following configuration line:
-<pre>apoc.import.file.enabled=true</pre>
-<br>
-After the configuration takes effect, the file can be accessed from Neo4j's command line. The path is relative to the "import" folder's path, hence you would define the path as
-<pre> :param yelp_business_file => '/yelp_dataset/yelp_academic_dataset_business.json'</pre>
-<br> if you have unzipped the files into a "yelp_dataset" folder under "import" folder. This command sets up the path string as a param which can be access using $yelp_business_file in other commands.
-
-##Understand the domain
-yelp is a online business directory that is used world-wide for discovering local businesses ranging from bars, restaurants, and cafes to hairdressers, spas, and gas stations. Listings are sorted by business types and results are filtered by geographical location, price, and unique features like outdoor seating, delivery service, or a the ability to accept reservations.
-It publishes crowd-sourced reviews about these businesses.  
+| u.component_id      | num |
+| :---        |    ----:   |
+| 109 | 1018074 |
+| 112624 | 6 |
+| 2003 |6      |
+| 318942 |6      |
+| 18630           |5      |
+| 274299          |5      |
+| 293805          |5      |
+| 118919          |5      |
+| 153377          |5      |
+| 108051          |5      |
   
-Some questions that came to mind:
-* Do restaurants with high ratings (> 4 stars) congregate together?
-* Do reviewers tend to give altogether high/low ratings? Do the majority (> 75%) of their ratings trend high/low?
-* If person A gives a high rating (> 4 stars) for a restaurant, does his/her friends also gives a high rating to the same restaurant? Also low ratings.
+There is a set with 1,018,074 users (around half the size of the original graph) with very many other small sets (6 nodes and below). We will concentrate on this set with component_id 109. Create a named graph for use in subsequent query/analysis:
+<pre>CALL gds.graph.create.cypher(
+    'com109Graph',
+    'MATCH (u:User) WHERE u.component_id = 109 RETURN id(u) AS id',
+    'MATCH (u1:User)-[:FRIENDS]-(u2:User) WHERE u1.component_id = 109 AND u2.component_id = 109 RETURN id(u1) AS source, id(u2) AS target'
+)</pre>
 
-Now that the files and Neo4j browser is set up, we can view the contents of the files on Neo4j browser.  
-To view the first 10 items of the file, run the following command:
-<pre>CALL apoc.load.json($yelp_business_file) YIELD value
-RETURN value LIMIT 10</pre>  
+### Louvain's algorithm
+Find the communities within the component using [Louvain's algorithm](https://neo4j.com/docs/graph-data-science/current/algorithms/louvain/). Some things to note:  
+* Louvain is a 2 phase algorithm, repeated iteratively and uses modularity (criterion to measure the density of links in a network).
+* It is relatively fast at O(n * log n) if n is the number of nodes in the network.
+* Works on undirected nodes.
+* There are differences between parallel vs non-paralleled processing (param: concurrency which is defaulted to 4). Consistent values are gotten with non-parallel processing (i.e., 1 thread), with parallel processing, values will differ slightly from one run to the next.
+* maxIterations (default 10): in two-phase round, the first phase keeps repeating iteratively until either the improvement of Modularity is negligible (tolerance below) or the iterations number is reached as specified here.
+* tolerance (default 0.0001): see above. In addition, the smaller the tolerance is, the higher Modularity can be squeezed out. (Modularity: the higher, the better; but more iterations may be needed).  
 
-For a start, I am interested in the following fields:  
-1.	Business
-* business_id: string, 22 character unique string business id
-* name: string, the business's name
-* latitude: float, latitude
-* longitude: float, longitude
-* stars: float, star rating, rounded to half-stars
-* review_count: integer, number of reviews
-* categories: an array of strings of business categories
-2. User
-* user_id: string, 22 character unique user id, maps to the user in user.json
-* name: string, the user's first name
-* review_count: integer, the number of reviews they've written
-* friends: // array of strings, an array of the user's friend as user_ids
-* average_stars: float, average rating of all reviews
+Let's investigate the effects of parallel/non-parallel processing and varying tolerance level on the output.
+First varying the tolerance level:
+<pre>UNWIND [0.01, 0.001, 0.0001, 0.00001, 0.000001, 0.0000001, 0.00000001, 0.000000001] as toleranceLevel
+CALL gds.louvain.write(
+    'com109Graph',
+    {
+        tolerance: toleranceLevel,
+        writeProperty: 'communityId'
+    }
+)
+YIELD ranLevels, computeMillis, communityCount, modularity
+RETURN toleranceLevel, computeMillis , ranLevels, communityCount, modularity</pre>  
+First run:
+|"toleranceLevel"|"computeMillis"|"ranLevels"|"communityCount"|"modularity"      |
+|:---|---:|---:|---:|---:|
+|0.01            |13392          |2          |2101            |0.6537906376520618|
+|0.001           |17595          |3          |226             |0.6540843411429211|
+|0.0001          |18588          |3          |225             |0.6554073088692922|
+|0.00001         |15854          |3          |180             |0.6543239969229836|
+|0.000001        |15588          |4          |176             |0.6543005860622277|
+|0.0000001       |15763          |4          |194             |0.6552706984550967|
+|0.00000001      |16584          |4          |180             |0.6562799279592473|
+|0.000000001     |15485          |5          |213             |0.6456996115708254|
+  
+Second run:
+|"toleranceLevel"|"computeMillis"|"ranLevels"|"communityCount"|"modularity"      |
+|:---|---:|---:|---:|---:|
+|0.01            |15048          |2          |2101            |0.6546005425114918|
+|0.001           |16178          |2          |1872            |0.6548609101678122|
+|0.0001          |17140          |3          |162             |0.6548731461025318|
+|0.00001         |16773          |3          |235             |0.6553389890732767|
+|0.000001        |15700          |4          |144             |0.6545002487813525|
+|0.0000001       |15452          |4          |182             |0.6557713727646982|
+|0.00000001      |16448          |4          |180             |0.6513642901462173|
+|0.000000001     |16123          |4          |189             |0.6556488927902553|
+  
+The highest modularity obtained is 0.6562799279592473 at tolerance level 0.00000001 for the first run, the next smaller tolerance did not return a better modularity (diminishing returns?). The results from the first and second runs varies as expected. 
+In the next run, we introduce the parameter "concurrency: 1":  
+|"toleranceLevel"|"computeMillis"|"ranLevels"|"communityCount"|"modularity"      |
+|:---|---:|---:|---:|---:|
+|0.01            |34274          |2          |2295            |0.6524108038980835|
+|0.001           |41968          |3          |238             |0.654898832773631 |
+|0.0001          |41412          |3          |235             |0.6549604140236959|
+|0.00001         |41472          |4          |174             |0.6550125845628862|
+|0.000001        |40087          |4          |174             |0.6550125845628862|
+|0.0000001       |40058          |4          |174             |0.6550125845628862|
+|0.00000001      |39059          |4          |174             |0.6550125845628862|
+|0.000000001     |39374          |4          |174             |0.6550125845628862|  
+  
+The same result was gotten from multiple runs.
+With a concurrency of 1, the processing time is increased by 2-3 times, but we get stable results. Modularity is maxed out at 0.6550125845628862 with 174 communities formed starting from tolerance level at 0.00001.
 
-### Importing data, creating relationships
-A first pass of the fields available and using the arrows.app tool to create our first graph model.
-![image](https://user-images.githubusercontent.com/830693/126449058-4722a6da-3431-4902-b483-1c157f7a0b7d.png)
+Using concurreny: 1 and tolerance: 0.00001, the top communities were:
+<pre>MATCH (u:User)
+WHERE u.component_id = 109
+RETURN u.communityId, count(*) AS num
+ORDER BY num DESC limit 10</pre> 
+|"u.communityId"|"num"  |
+|:---|---:|
+|854910         |153523 |
+|886297         |128049 |
+|38936          |121473 |
+|404864         |116571 |
+|631429         |116296 |
+|695            |111812 |
+|785839         |64250  |
+|631747         |47073  |
+|549904         |36982  |
+|755579         |35362  |
+  
+The number of users in the top communities seems rather large, what is their relationship to each other? One thing that comes to mind could be geographical location. Using the top community_id 854910:
+<pre>MATCH (n:User)-[:WROTE]->(r:Review)-[:REVIEWS]->(:Business)-[:IN_CITY]->(c:City)
+WHERE n.communityId = 854910
+RETURN c.city_id, count(r) AS reviews
+ORDER BY reviews DESC LIMIT 10</pre>
 
-Looking at this graph, I think some of the following questions can be answered (if not, we might need to refactor the graph model in a later iteration):
-* How many restaurants are there?
-* What is the average number of reviews that a restaurant has?
-* What is the average number of reviews that each user gave?
-The preceding questions looks like they would have been better answered using a traditional database, or even another NoSQL database.
-The power of a labelled property graph database lies in traversing the relationships of the graph, and some of the following questions might take advantage of that:
-* Find communities within the graph
-* Find the important nodes (users) within the communities (Top 10)
-* Find important intermediaries between communities (users that connects different communities)
-	
-Let's try to import "Business" and "User" datasets into our database.  
-Let's see how many records there are in the datasets:
-<pre>CALL apoc.load.json($yelp_business_file) YIELD value
-RETURN count(value);
-CALL apoc.load.json($yelp_user_file) YIELD value
-RETURN count(value)</pre>
-User: 2,189,457
-Business: 160,585
+|"c.city_id"                     |"reviews"|
+|:---|---:|
+|"Boston-Massachusetts-US"       |254747   |
+|"Cambridge-Massachusetts-US"    |114533   |
+|"Brookline-Massachusetts-US"    |105961   |
+|"Somerville-Massachusetts-US"   |52942    |
+|"South Boston-Massachusetts-US" |35298    |
+|"Watertown-Massachusetts-US"    |28924    |
+|"Quincy-Massachusetts-US"       |25933    |
+|"Jamaica Plain-Massachusetts-US"|21574    |
+|"Newton-Massachusetts-US"       |19656    |
+|"Waltham-Massachusetts-US"      |19362    |  
+  
+We can see that this community's reviews are mostly on businesses located in the state of Massachusetts. Running the same query on community_id 886297 shows the location of Texas. We can infer the locations of the users based on the location of the businesses that they reviewed (however, there is no way to verify this against the user's actual addresses as that information is not part of the dataset).
+  
+Conclusion: From the "FRIENDS" relationship, we have managed to find communities in the network. These communities are largely grouped by geographical locations (inferred).
 
-Both apoc.load.json and "LOAD CSV" are single-threaded commands, so the loading might be able to be sped up using parallel processing with *apoc.periodis.iterate*.  
-The general construct of the command is:  
-<pre>WITH 'call apoc.load.json("/yelp/yelp_dataset/yelp_academic_dataset_user.json") YIELD value RETURN value' AS load_json
-CALL apoc.periodic.iterate(load_json, 'WITH value 
-CREATE (u:User) SET
-    u.user_id= value.user_id,
-	u.name = coalesce(value.name),
-	u.review_count = value.review_count,
-	u.average_stars = value.average_stars',
-{batchSize: 5000, parallel: True, iterateList: True, retries:3}) 
-YIELD batches, total
-RETURN *
+### Triangle and Local Clustering Coefficient
+A [Triangle](https://neo4j.com/docs/graph-data-science/current/algorithms/triangle-count/) is a set of three nodes where each node has a relationship to the other two.  
+* Counts triangles in a network.
+* Works on Undirected graph
+* Used to compute the Local Clustering Coefficient
+* Proved lower bound for triangle listing algorithm is O(n^3) or O(m^1.5), here n is the number of vertices and m is the number of edges. If you want to solve triangle counting with Matrix Multiplication method, the time complexity is same as Matrix Multiplication.
+* *writeProperty*: The node property in the Neo4j database to which the triangle count is written.
+* In addition to the standard execution modes there is an alpha procedure gds.alpha.triangles that can be used to list all triangles in the graph.
+  
+The [Local Clustering Coefficient algorithm](https://neo4j.com/docs/graph-data-science/current/algorithms/local-clustering-coefficient/) (only defined for undirected graphs) computes the local clustering coefficient for each node in the graph. The local clustering coefficient Cn of a node n describes the likelihood that the neighbours of n are also connected.
+
+First, run the triangle algoritm for component_id 109:
+<pre>CALL gds.triangleCount.write(
+    'com109Graph',
+    {
+        writeProperty: 'triangleCount109'
+    }
+)
 </pre>
-The above command took 48709ms (around 49seconds) to run on my desktop with exactly 2,189,457 nodes created:
-![image](https://user-images.githubusercontent.com/830693/126462080-da955ee7-d904-4f45-b513-44a7b1bd4ec3.png)
+  
+This procedure completed in 2329ms, and yield 37,494,831 total triangles counted.
+  
+Next, calculate the local clustering coefficient:
+<pre>CALL gds.localClusteringCoefficient.write(
+    'com109Graph',
+    {
+        writeProperty: 'lcc109'
+    }
+)</pre>
+  
+The procedure completed in 4221ms.
+  
+Querying the triangle count and coefficient values:
+<pre>MATCH (u:User) WHERE u.component_id = 109
+RETURN u.name,u.triangleCount109, u.lcc109 
+ORDER BY u.triangleCount109 DESC, u.lcc109 DESC LIMIT 10</pre>
+|"u.name"   |"u.triangleCount109"|"u.lcc109"          |
+|:---|---:|---:|
+|"Steven"   |295550              |0.014583423076526433|
+|"Michael"  |250168              |0.04446375837912247 |
+|"Cassandra"|242354              |0.04874101041353053 |
+|"Randy"    |239769              |0.02763686367489867 |
+|"Dan"      |215332              |0.045442295910948866|
+|"Leah"     |208813              |0.049064323129545014|
+|"Phil"     |208556              |0.022058386461966218|
+|"Maria"    |188912              |0.047025847637468435|
+|"Guy"      |188386              |0.030417021881216255|
+|"Marianne" |184200              |0.033574368867482954|
+  
+This tells us that the top users are friends with alot of other users, but their friends might not necessarily know each other.
+Close-knitted communities can be found with high local clustering coefficient (these users are probably more likely to hang out in a group as all of them know each other):
+<pre>MATCH (u:User) 
+WHERE u.component_id = 109 AND u.triangleCount109 > 10
+RETURN u.name,u.triangleCount109, u.lcc109 
+ORDER BY  u.lcc109 DESC LIMIT 10</pre>
+  
+|"u.user_id"               |"u.name"  |"u.triangleCount109"|"u.lcc109"|
+|:---|---:|---:|---:|
+|"u-vdNG3dQk-EQMo4AoP4DSxw"|"Vinny"   |15                  |1.0       |
+|"u-_-FgFe-UCtO1r4846qazDA"|"Jake"    |21                  |1.0       |
+|"u-daPp3GR9Ek8YgPZDMHT81g"|"Shari"   |21                  |1.0       |
+|"u-5lfHaahD4bEufAZdo84qAA"|"Samantha"|15                  |1.0       |
+|"u-eQRdUkjxtSy91g8v38TokQ"|"Mike"    |15                  |1.0       |
+|"u-asveGQahhSL5FWbjlE1YIg"|"Jason"   |15                  |1.0       |
+|"u-rj9-ndvzOYoUIyRjTuUylA"|"Gigi"    |15                  |1.0       |
+|"u-2X8Yg1sQbd_uoB_ZbI8MeA"|"Tina"    |21                  |1.0       |
+|"u-NQyPXNzszWmK8WTswOx9QQ"|"Joni"    |15                  |1.0       |
+|"u-BqcvOzSengNYo6XbTpwXaw"|"Tina"    |15                  |1.0       |
+  
+<pre>MATCH (u1:User)-[:FRIENDS]-(u2:User)
+WHERE u1.component_id=109 and u2.component_id=109 and u1.user_id = "u-vdNG3dQk-EQMo4AoP4DSxw"
+    RETURN u1,u2</pre>
+  
+![image](https://user-images.githubusercontent.com/830693/127731833-be7fcae2-c520-45b2-b3a1-6be337c4c077.png)
+  
+## Find important nodes (users) in a community
+Of the algorithms in the Centrality category, [PageRank](https://neo4j.com/docs/graph-data-science/current/algorithms/page-rank/#algorithms-page-rank) is probably the most famous as it was used by Google Search to rank web pages in their search engine results.
+* Measures importance of each node within the graph based on the number of incoming relationships and the importance of the corresponding source nodes. Underlying assumption roughly speaking is that a page is only as important as the pages that link to it.
+* *dampingFactor* (defaulted 0.85): see sinks (d=1) and random restarts (d=0)
+* Scales well, roughly O(log n) where n is the size of the network
+* *tolerance* (defaulted 0.0000001) configuration parameter denotes the minimum change in scores between iterations
+* Defined for directed (NATURAL) graphs (*orientation*: NATURAL, REVERSE, UNDIRECTED)
 
-NOTE: Initially the command just ended without any error message but no nodes were created. To investigate further, look at the Neo4j's log files located at (you guessed it...) Manage->Open Folder->Logs.  
-I found the problem under neo4j.log. There was extra curly brackets around {value} which were not required (cryptic error message was: 
-<pre>The old parameter syntax `{param}` is no longer supported. Please use `$param` instead (line 1, column 59 (offset: 58))
-"UNWIND $_batch AS _batch WITH _batch.value AS value  WITH {value}"</pre>
+Generate the PageRank score for each node:
+<pre>UNWIND [20, 30, 40] AS numIter
+CALL gds.pageRank.write({
+    nodeProjection: 'User',
+    relationshipProjection: {
+        FRIEND_OF: {
+            type: 'FRIENDS',
+            orientation: 'UNDIRECTED'
+        }
+    },
+    writeProperty: 'pageRank' + toString(numIter),
+    maxIterations: numIter
+})
+YIELD ranIterations, didConverge, createMillis, computeMillis, writeMillis, nodePropertiesWritten, centralityDistribution, configuration
+RETURN numIter, ranIterations, didConverge, createMillis, computeMillis, writeMillis, nodePropertiesWritten, centralityDistribution, configuration</pre>
+  
+|"numIter"|"ranIterations"|"didConverge"|"createMillis"|"computeMillis"|"writeMillis"|"nodePropertiesWritten"|
+|:---|---:|---:|---:|---:|---:|---:|
+|20       |20             |false        |3241          |3873           |7874         |2189457                |
+|30       |30             |false        |2525          |7109           |6886         |2189457                |
+|40       |40             |false        |1665          |7424           |5175         |2189457                |
 
-We will have to go through the user file for a second time to create the FRIEND_OF relationship between all the user nodes.
-In order to make it run faster, create an index on user_id
-<pre>CREATE CONSTRAINT ConstraintUniqueUserId ON (p:USER) ASSERT p.user_id IS UNIQUE</pre>
-<pre>WITH 'call apoc.load.json("/yelp/yelp_dataset/yelp_academic_dataset_user.json") YIELD value RETURN value' AS load_json
-CALL apoc.periodic.iterate(load_json, 'WITH value 
-MATCH (u:User {user_id:value.user_id}) 
-WITH u,value.friends as friends
-UNWIND friends as friend
-MERGE (u1:User{user_id:friend})
-MERGE (u)-[:FRIEND_OF]-(u1)',
-{batchSize: 1000, parallel: True, iterateList: True, retries:3}) 
-YIELD batches, total
-RETURN *
-</pre>
-NOTE: The above had trouble running to completion, after running for > 3hrs, only 18,000 relationships had been created and it was all 1-1 relationships, i.e., no single node had more than one friend as the following return 0 rows:
-<pre>MATCH (p1:User)-[r:FRIEND_OF]-(p2:User)
-WITH p1, count(r) as num_friends
-WHERE num_friends > 1
-RETURN p1,p2
-</pre>
+<table>
+<tr>
+<th>"numIter"</th>
+<th>centralityDistribution</th>
+</tr>
+<tr>
+<td>20</td>
+<td>{
+  "p1": 0.14999961853027344,</br>
+  "max": 260.4687490463257,</br>
+  "p5": 0.14999961853027344,</br>
+  "p90": 1.1614675521850586,</br>
+  "p50": 0.14999961853027344,</br>
+  "p95": 1.8240423202514648,</br>
+  "p10": 0.14999961853027344,</br>
+  "p75": 0.5108137130737305,</br>
+  "p99": 4.223540306091309,</br>
+  "p25": 0.14999961853027344,</br>
+  "p100": 260.4687490463257,</br>
+  "min": 0.14999961853027344,</br>
+  "mean": 0.5352733978808337,</br>
+  "stdDev": 1.6442461380875133</br>
+}
+</td>
+</tr>
+<tr>
+<td>30</td>
+<td>{
+  "p1": 0.14999961853027344,</br>
+  "max": 265.4628896713257,</br>
+  "p5": 0.14999961853027344,</br>
+  "p90": 1.1914434432983398,</br>
+  "p50": 0.14999961853027344,</br>
+  "p95": 1.8777074813842773,</br>
+  "p10": 0.14999961853027344,</br>
+  "p75": 0.5193052291870117,</br>
+  "p99": 4.371397972106934,</br>
+  "p25": 0.14999961853027344,</br>
+  "p100": 265.4628896713257,</br>
+  "min": 0.14999961853027344,</br>
+  "mean": 0.5477500813741137,</br>
+  "stdDev": 1.7068092756877828</br>
+}
+</td>
+</tr>
+<tr>
+<td>20</td>
+<td>{
+  "p1": 0.14999961853027344,</br>
+  "max": 266.4257802963257,</br>
+  "p5": 0.14999961853027344,</br>
+  "p90": 1.197310447692871,</br>
+  "p50": 0.14999961853027344,</br>
+  "p95": 1.8883047103881836,</br>
+  "p10": 0.14999961853027344,</br>
+  "p75": 0.5209493637084961,</br>
+  "p99": 4.400237083435059,</br>
+  "p25": 0.14999961853027344,</br>
+  "p100": 266.4257802963257,</br>
+  "min": 0.14999961853027344,</br>
+  "mean": 0.550206431214031,</br>
+  "stdDev": 1.7192745702237355</br>
+}
+</td>
+</tr>
+<tr>
+</tr>
+</table>
+  
+The distribution seems to be relatively stable for the different iterations ran.  
+Find the most important nodes (users):
+<pre>MATCH (u:User)
+RETURN u.user_id, u.name, u.pageRank20, u.betweeness109, u.lcc109
+ORDER BY u.pageRank20 DESC LIMIT 20</pre>
+  
 
-<pre>
-CALL apoc.periodic.iterate("
-CALL apoc.load.json('/yelp/yelp_dataset/yelp_academic_dataset_user.json')
-YIELD value RETURN value
-","
-MERGE (u:User{id:value.user_id})
-SET u += apoc.map.clean(value, ['friends','user_id'],[0]),u.name = coalesce(value.name),
-	u.review_count = value.review_count,
-	u.average_stars = value.average_stars
-WITH u,value.friends as friends
-UNWIND friends as friend
-MERGE (u1:User{id:friend})
-MERGE (u)-[:FRIEND_OF]-(u1)
-",{batchSize: 100, iterateList: true});
-</pre>
-
-Madness!!! Am I really seeing 4,793,726,333,764 estimated rows?
-
-
-Processing this line of 2 friends is successful with two relationships being created:
-<pre>{"user_id":"cojecOwQJpsYDxnjtgzteQ","name":"Steven","review_count":51,"yelping_since":"2010-07-04 17:18:40","useful":136,"funny":47,"cool":44,"elite":"2010,2011","friends":"pezqbtp3BHiRUGG_Bm5_ug,wpuR1jPNjmdMEK8kXipYmQ","fans":4,"average_stars":3.79,"compliment_hot":4,"compliment_more":5,"compliment_profile":2,"compliment_cute":1,"compliment_list":0,"compliment_note":4,"compliment_plain":6,"compliment_cool":12,"compliment_funny":12,"compliment_writer":4,"compliment_photos":2}</pre>
-However, increasing the number of friends in the the array results in no relationships being created:
-<pre>{"user_id":"cojecOwQJpsYDxnjtgzteQ","name":"Steven","review_count":51,"yelping_since":"2010-07-04 17:18:40","useful":136,"funny":47,"cool":44,"elite":"2010,2011","friends":"_Tpd51CSlnOyvDTpOtgG5w, jVYzrVblDFSuL3GHtt8ZSA, VH18dyRNF2zrJly76eMppQ, qnYw6KaUiO4nFdfBhxqtKw, Mntyg_rQ9wgSF36wVW4asA, aUhcscNphAJQlZe1R_WRow, DVFtg_fc2FlOyOcx1Go6LQ, dboAKYo-6jWm0QkoU4Gw_A, hZMR_sCpKgrS65G3w2ufiA, 9BoPpMPWLG0xPQ1w6SDwPQ, BlYS4iE1imr8uHZUI04DPw, _rbJiH3hh_Csf_ERzSGFhA, Er1zMjQX2WxhgLWvq3LyIQ, E3dfnSs-DAQCw4Qf7J6zGg, KBZsToaFJmNMerS8gFC7Gw, pezqbtp3BHiRUGG_Bm5_ug, rdN5-4o2cqK2zC37sWSjkA, MuLxtrBiNIt0fPfQ3vM5ZQ, bn3mL61VLF_OhTYOGPb3pg, NeThj2YLGWSdlVQ-6Lk1Zw, swN__VyeFg6O_BFR0x5ZeA, GYMIDghm2k7gSTpyKNid1Q, a3H38cSs0qFsp11uRFx-ag, kJYS_6m7tYKGZLDRQv9uKg, 69GcN45awmlCq_RbLWd9uw, C2wI0o8n_CehtjafAiv7og, 6URZKBI8tRaztdo4eqMRew, s0pkzHUflmrarGSWP1G9gg, _CKhWiEVD6Xni44q4eelGw, QCNLvK6xxebYoItPU49-Og, r1nxWgnYj0WT3eY2dAsLfA, e3uXoS2ACM0ABD_uC2te9Q, v9HPVo-cqGEQ2gYSAbGnzQ, 2j-EXRubkWMhnqq6_rL-fg, jd3zDm_qigq0Ni5l_WOeLQ, aV_d1Ql5dhpTBFmiN2vkcg, UaFrZ5obw9q1XAFF6_QsBA, 17XthUbE3VBxFfKmBuV5zA, F_kM1y9821efOrLI7x0cOw, IBevAvzgKSZm-ADAkWjXFg, 0dGi59C6bWFAzrhUjm_cKQ, vV6eQMXV6jTI3b8sf1hlzA, 7luj-qkZxPaeiXUndtQSRg, RUbi_o_PihlKZaMxPwJnmQ, BmGKtjhYkFvMR13-RubrOQ, tJZmmVGVHaMqfXr-tx5w-w, aNb7imBYruQZbAqNWTFD7w, w0OabwDAGFWnWBA0w2KAFA, WvDwS_KRAQPuKNYsCdlbaw, 6dtE2xvLX32eOHEeFTBiqA, wpuR1jPNjmdMEK8kXipYmQ","fans":4,"average_stars":3.79,"compliment_hot":4,"compliment_more":5,"compliment_profile":2,"compliment_cute":1,"compliment_list":0,"compliment_note":4,"compliment_plain":6,"compliment_cool":12,"compliment_funny":12,"compliment_writer":4,"compliment_photos":2}
-</pre>
-
+|"u.user_id"               |"u.name"   |"u.pageRank20"    |"u.betweeness109" |"u.lcc109"           |
+|:---|---:|---:|---:|---:|
+|"u-ckG7-tdMfxiukdA4jEnE1Q"|"Issabelle"|260.46788326613614|530819.3606627139 |0.006674454947525701 |
+|"u-qVc8ODYU5SZjKXVBgXdI7w"|"Walker"   |236.46832053959372|709537.6545891687 |0.0032328578869789764|
+|"u-hdzTAN8DGJKRddkZ8279JQ"|"Andi"     |226.6290947455913 |575625.2812810297 |0.007663471660200081 |
+|"u-_NpJZ0q8KVI-d2YLL_VpCA"|"Jayme"    |214.6310708640143 |332330.4350181412 |0.005184093716421638 |
+|"u-DOj9NanlJP3xntULCy5Uow"|"Chris"    |209.52216092795135|1021469.362654937 |0.007124934706063567 |
+|"u-Oi1qbcz2m2SnwUeztGYcnQ"|"Steven"   |207.9765872254968 |2092010.8010382573|0.014583423076526433 |
+|"u-f1MFQxTZAWJnRQdrouLg_A"|"Matt"     |203.67942263633014|834674.5418388057 |0.01012423548077502  |
+|"u-I2XEhv9zBeAJcwYIrnMf1g"|"Matt"     |199.2908848822117 |262183.9550092841 |0.007961728195372962 |
+|"u-pnTiEaqM4slogpY97n9Kvg"|"Jonathan" |187.17403576858345|591509.0245789832 |0.01103725020056407  |
+|"u-rcU7ysY41qGppbw4pQgjqg"|"Damien"   |174.441122539714  |1123794.0405309324|0.012213785859812965 |
+|"u-tDYysNkQGmEm1iJONRfruw"|"Alejandra"|173.66525547243657|126773.84656706425|0.0020181624421907107|
+|"u-hizGc5W1tBHPghM5YKCAtg"|"Katie"    |172.92671057879926|1279144.7137138925|0.010889296154394473 |
+|"u-mGHP3esQQqCEicHLRV-g5Q"|"Cara"     |166.88000118285416|484676.4203181418 |0.0009219759218467533|
+|"u-NfU0zDaTMEQ4-X9dbQWd9A"|"Cara"     |163.11558457463985|312520.4565724689 |0.011476874756955238 |
+|"u-OA-eps0MDNwnaThISWu-rw"|"Anna"     |157.3488865233958 |122827.94597551331|0.0025493875050666783|
+|"u-wSByVbwME4MzgkJaFyfvNg"|"Bryant"   |151.88011895231904|432913.6251272735 |0.012346295984150392 |
+|"u-mV4lknblF-zOKSF8nlGqDA"|"Scott"    |151.4510991290212 |240740.14771033142|0.007511310236926898 |
+|"u-Ymi6SLVPnCkSxUh6dcOq9Q"|"Kellie"   |149.2554573792964 |341550.94939860643|0.01085379801567745  |
+|"u-tgeFUChlh7v8bZFVl2-hjQ"|"Steve"    |148.74780438542365|313416.72436480166|0.01115468621977514  |
+|"u-iLjMdZi0Tm7DQxX1C1_2dg"|"Ruggy"    |147.31913893371825|570950.3004874    |0.013639794317114358 |
+  
