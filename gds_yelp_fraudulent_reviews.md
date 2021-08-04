@@ -28,6 +28,8 @@ RETURN count(r)</pre>
 
 Still too many to go through unless we want to introduce a text analyser.  
 Let's narrow down to "Restaurants" Category in the same city, we want to find users who have exactly 2 reviews, one 5 star and the other 1 star, and the user joined yelp on the same day as both reviews were posted.
+![image](https://user-images.githubusercontent.com/830693/128161361-bd53d3f1-ba10-45de-8d81-9ddbbc1007a3.png)
+
 <pre>MATCH (u:User)-[w:WROTE]->(r:Review)
 with u, count(r) AS numReview
 WHERE numReview = 2
