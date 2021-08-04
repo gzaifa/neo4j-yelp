@@ -1,0 +1,39 @@
+# Finding Fraudulent reviews
+Some clues that might identify a review as fake/fraudulent:
+- Reviewer has posted reviews in multiple states
+- Reviewer has reviewed several businesses in the same niche
+For example, if a profile reviews five garage door companies in three different states, there's a very high chance that this person is engaging in fraudulent activity.
+
+Another article by the [consumerist website](https://consumerist.com/2010/04/14/how-you-spot-fake-online-reviews/) lists 30 ways to spot fake online reviews. Among the 30, these might be suitable for detection using a graph database:
+| Method | Suitability for graph database |
+|:---|:---|
+| Reviewers have no other reviews on the site	|	|
+| Multiple reviews that are exactly the same	|	|
+* Beware the "polyamorous" reviewer, every product gets a glowing and unvarnished review...
+* And the "monogamous" reviewer, whose only reviews are for products by one manufacturer. All praise, natch.
+* All of the reviewers have accounts created around the same time, usually around the time the domain nace was registered.
+	
+* Higher proportion of 1 and 5 stars review versus 2-4 stars?
+
+
+Find users with reviews between 4 and 1:
+<pre>MATCH (u:User)-[w:WROTE]->(r:Review)
+with u, count(r) AS numReview
+WHERE numReview > 1 and numReview <=4
+RETURN u, numReview LIMIT 10</pre>
+
+  
+<pre>MATCH (u:User)-[w:WROTE]->(r:Review)
+with u, count(r) AS numReview
+WHERE numReview > 1 and numReview <=7
+MATCH (u)-[w5:WROTE]->(r5:Review {stars:'5.0'})-[re5:REVIEWS]->(b5:Business)-[ic5:IN_CATEGORY]->(cat51:Category)<-[ic1:IN_CATEGORY]-(b1:Business)<-[re1:REVIEWS]-(r1:Review {stars:'1.0'})<-[w1:WROTE]-(u)
+MATCH (b5)-[:IN_CITY]->(city51:City)<-[:IN_CITY]-(b1)
+RETURN city51.city_id, cat51.category_id , u.user_id, r5.stars, r5.text, b5.name, r1.stars, r1.text, b1.name LIMIT 10</pre>
+
+<pre>MATCH (u:User)-[w:WROTE]->(r:Review)
+with u, count(r) AS numReview
+WHERE numReview > 1 and numReview <=7
+MATCH (u)-[w5:WROTE]->(r5:Review {stars:'5.0'})-[re5:REVIEWS]->(b5:Business)-[ic5:IN_CATEGORY]->(cat51:Category)<-[ic1:IN_CATEGORY]-(b1:Business)<-[re1:REVIEWS]-(r1:Review {stars:'1.0'})<-[w1:WROTE]-(u)
+MATCH (b5)-[:IN_CITY]->(city51:City)<-[:IN_CITY]-(b1)
+WHERE apoc.date.convertFormat(r5.date, "yyyy-MM-dd HH:mm:SS", 'iso_date') = apoc.date.convertFormat(r1.date, "yyyy-MM-dd HH:mm:SS", 'iso_date')
+RETURN city51.city_id, cat51.category_id , u.user_id, r5.stars, r5.text, b5.name,r5.date,r1.date, r1.stars, r1.text, b1.name LIMIT 100</pre>
