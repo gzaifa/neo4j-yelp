@@ -1,4 +1,4 @@
-# neo4j-yelp Data Modelling and Processing
+# Neo4j Yelp Data Modelling and Processing
 Use Neo4J (a labelled graph database) to explore yelp data to see if any insights can be found.
 
 Neo4j lists, as best practice, the following steps to designing the initial data model, highlighting that it is an iterative process.
