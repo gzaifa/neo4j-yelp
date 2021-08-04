@@ -1,7 +1,7 @@
 # Finding Fraudulent reviews
 Some clues that might identify a review as fake/fraudulent:
-- Reviewer has posted reviews in multiple states
-- Reviewer has reviewed several businesses in the same niche
+* Reviewer has posted reviews in multiple states
+* Reviewer has reviewed several businesses in the same niche
 For example, if a profile reviews five garage door companies in three different states, there's a very high chance that this person is engaging in fraudulent activity.
 
 Another article by the [consumerist website](https://consumerist.com/2010/04/14/how-you-spot-fake-online-reviews/) lists 30 ways to spot fake online reviews. Among the 30, these might be suitable for detection using a graph database:
