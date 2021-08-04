@@ -18,3 +18,9 @@ Some scenarios which I want to run with gds:
 </ol>
 
 A thing to note is that "the graph algorithms library operates completely on the heap, which means we’ll need to configure our Neo4j Server with a much larger heap size than we would for transactional workloads." [link](https://neo4j.com/docs/graph-data-science/current/common-usage/memory-estimation/#memory-estimation)
+
+## Topics
+- [Importing yelp data into Neo4j](https://github.com/gzaifa/neo4j-yelp/blob/main/importing_yelp.md)
+- [Neo4j Yelp Data Modelling and Processing](https://github.com/gzaifa/neo4j-yelp/blob/main/yelp_data_modelling.md)
+- [Detecting communities with Neo4j GDS library](https://github.com/gzaifa/neo4j-yelp/blob/main/gds_yelp_community.md)
+- [Finding fraudulent reviews](https://github.com/gzaifa/neo4j-yelp/blob/main/gds_yelp_fraudulent_reviews.md)
