@@ -51,6 +51,7 @@ A very manageable 390 records fulfilling the criteria was found. Listed some of 
 |"2015-07-26 00:41:39" | "2015-07-26 00:58:18" | "2015-07-26 00:55:25" | "Tangelo Park-Florida-US" | "Restaurants" | "u-9YyRq53_UidiIzmkkjljEw" | "5.0" | "Best sushi I have ever had in orlando. The spice tuna bowl is to die for. The rice is just right, and no other place can match it. The fish taste like they killed it right before they served it to me. I would give this more stars if I could. One word.....Perfection." | "Sushi Tomi" | "1.0" | "This was the worst sushi I have ever had. I had my girlfriend go to pick me up sushi. She ordered twice. The first order came back to the table poorly prepared and had a weird taste. She returned it for a different order came. It still did not look right. She brought it home and I ate it. I can tell you this that if you are looking to lose weight then Aki is for you. Just know that I lost 3 hrs of my life to my bathroom. Vaseline was my savior." | "Aki Restaurant"|
   
 Visualise the graph with 20 records:  
-![image](https://user-images.githubusercontent.com/830693/128162675-b29e8eb3-fce7-40a2-b037-20f967503f2c.png)
+![image](https://user-images.githubusercontent.com/830693/128162929-e5ac9bae-9294-4223-a561-edbf2b5678ea.png)
+
 
 Conclusion: While a graph database may not be the best choice for detecting fraudulent reviews, it might be a tool in which the data can be narrowed down for further analysis.
