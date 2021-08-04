@@ -1,10 +1,5 @@
 # Finding Fraudulent reviews
-Some clues that might identify a review as fake/fraudulent:
-* Reviewer has posted reviews in multiple states
-* Reviewer has reviewed several businesses in the same niche
-For example, if a profile reviews five garage door companies in three different states, there's a very high chance that this person is engaging in fraudulent activity.
-
-Another article by the [consumerist website](https://consumerist.com/2010/04/14/how-you-spot-fake-online-reviews/) lists 30 ways to spot fake online reviews. Among the 30, these might be suitable for detection using a graph database:
+An article by the [consumerist website](https://consumerist.com/2010/04/14/how-you-spot-fake-online-reviews/) lists 30 ways to spot fake online reviews. Among the 30, these might be suitable for detection using a graph database:
 | Method | Suitability for graph database |
 |:---|:---|
 | Reviewers have no other reviews on the site	| This looks like it will be easier to query for in a normal SQL database. No advantage in graph database	|
@@ -19,7 +14,7 @@ Another article by the [consumerist website](https://consumerist.com/2010/04/14/
 Hypothesis to narrow down dataset for analysis:
 * Users that have 2 or less reviews.
 * These reviews are written on the same day that they joined yelp.
-* These reviews are 1 or 5 stars (Note: There have been research which shows that people are more likely to leave a review when their experience is extremely good or bad. For example, roughly 50% of products on Amazon have a bimodal distribution of ratings).
+* These reviews are 1 or 5 stars (Note: Might not be a good guage as there have been research which shows that people are more likely to leave a review when their experience is extremely good or bad. For example, roughly 50% of products on Amazon have a bimodal distribution of ratings at 1 and 5 stars).
 
 We get around 224,145 which satisfies the above criteria:
 <pre>MATCH (u:User)-[w:WROTE]->(r:Review)
@@ -53,4 +48,4 @@ A very manageable 390 records fulfilling the criteria was found. Listed some of 
 |"2016-03-12 03:24:08" | "2016-03-12 03:42:52" | "2016-03-12 03:24:10" | "Worthington-Ohio-US" | "Restaurants" | "u-Ms3eYVwPpFkBIdOQX790tg" | "5.0" | "I love Dante's pizza. I no longer live very close but I work downtown and will sometimes pick-up a pizza on the way home. Tonight we dined-in and had pizza hot out of the oven. The staff are friendly, the pizza is amazing, they're a neighborhood favorite and I highly recommend Dante's!!!" | "Dante's Pizza" | "1.0" | "I had purchased a Groupon to try Ange's and when I tried to redeem it I was told that they were under new management and that they wouldn't honor it. Now they may be under new management but what really disappointed me was that the new management made NO effort to see if they could convince me to stay and still try their pizza. They just had this, "sorry about your luck" attitude and let us walk out without any attempt to see if they could attract us as a customer. It appears this place needs new management again! What was also surprising was that the place was empty, and this was a Friday night. The new management needs a lesson in marketing and building a customer base. I'll address my Groupon refund with Groupon but I wouldn't give this new management my business, they don't seem to be concerned with attracting customers. We drove to Dante's and had amazing pizza, go there instead." | "Ange's Pizza"|
 |"2015-07-26 00:41:39" | "2015-07-26 00:58:18" | "2015-07-26 00:55:25" | "Tangelo Park-Florida-US" | "Restaurants" | "u-9YyRq53_UidiIzmkkjljEw" | "5.0" | "Best sushi I have ever had in orlando. The spice tuna bowl is to die for. The rice is just right, and no other place can match it. The fish taste like they killed it right before they served it to me. I would give this more stars if I could. One word.....Perfection." | "Sushi Tomi" | "1.0" | "This was the worst sushi I have ever had. I had my girlfriend go to pick me up sushi. She ordered twice. The first order came back to the table poorly prepared and had a weird taste. She returned it for a different order came. It still did not look right. She brought it home and I ate it. I can tell you this that if you are looking to lose weight then Aki is for you. Just know that I lost 3 hrs of my life to my bathroom. Vaseline was my savior." | "Aki Restaurant"|
   
-While a graph database may not be the best choice for detecting fraudulent reviews, it might be a tool in which the data can be narrowed down for further analysis.
+Conclusion: While a graph database may not be the best choice for detecting fraudulent reviews, it might be a tool in which the data can be narrowed down for further analysis.
