@@ -33,11 +33,11 @@ Similarly, to access this file, go to Manage->Open Folder-> Configurations.
 Open the "neo4j.conf" file in your favorite editor and add the following configuration line:
 <pre>apoc.import.file.enabled=true</pre>
 <br>
-After the configuration takes effect, the file can be accessed from Neo4j's command line. The path is relative to the "import" folder's path, hence you would define the path as
+After the configuration takes effect, the file can be accessed from Neo4j's Browser command line. The path is relative to the "import" folder's path, hence you would define the path as
 <pre> :param yelp_business_file => '/yelp_dataset/yelp_academic_dataset_business.json'</pre>
 <br> if you have unzipped the files into a "yelp_dataset" folder under "import" folder. This command sets up the path string as a param which can be access using $yelp_business_file in other commands.
 
-##Understand the domain
+## Understand the domain  
 yelp is a online business directory that is used world-wide for discovering local businesses ranging from bars, restaurants, and cafes to hairdressers, spas, and gas stations. Listings are sorted by business types and results are filtered by geographical location, price, and unique features like outdoor seating, delivery service, or a the ability to accept reservations.
 It publishes crowd-sourced reviews about these businesses.  
   
