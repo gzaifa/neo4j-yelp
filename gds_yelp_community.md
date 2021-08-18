@@ -3,7 +3,7 @@ What are the properties that we want in a community:
 * Many edges connecting vertices within a community  
 * More connections internally then externally
  
-As there are 2,189,457 users and 17,971,548 "FRIENDS" relationships in the graph, we might want to drill down to smaller graphs before running some of the more compute intensive algorithms (for e.g. Triangle with O(n * m) time, where n is the number of nodes and m the number of relationships in the graph).  
+As there are 2,189,457 users and 17,971,548 "FRIENDS" relationships in the graph, we might want to drill down to smaller graphs before running some of the more compute intensive algorithms.  
 We can use the [weakly connected components](https://neo4j.com/docs/graph-data-science/current/algorithms/wcc/) algorithm to separate out the "islands", as it finds sets of nodes where the same set forms a connected component. Read about connected, weakly connected, and strongly connected [here](https://en.wikipedia.org/wiki/Connectivity_(graph_theory)).
 <pre>CALL gds.wcc.write({
     nodeProjection: 'User',
