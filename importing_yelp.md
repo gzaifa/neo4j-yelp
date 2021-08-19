@@ -52,15 +52,17 @@ The solution found was to use split before unwinding.
 After struggling with the large amount of data and transaction requirements for a few days, I got some inspiration from [TRAN Ngoc Thach](https://thachngoctran.medium.com/exploring-yelp-dataset-with-neo4j-part-i-from-raw-data-to-nodes-and-relationships-with-python-21f52dd408ef). His strategy was to pre-process and "denormalise" the data into csv files which can be imported using Neo4J's [Import Tool](https://neo4j.com/docs/operations-manual/current/tutorial/import-tool/), which Neo4J recommends for data ingesting for more than 10 million records. (10.1 million nodes and 27million relationships)
 The requirements was that the database be empty and offline while the import was running. The easiest way to do this was to specify a "new" database which the import tool will create.
 The command I used:
-<pre>./bin/neo4j-admin import --multiline-fields=true 
---nodes ./import/yelp_csv/area_nodes.csv 
---nodes ./import/yelp_csv/business_nodes.csv 
---nodes ./import/yelp_csv/category_nodes.csv 
---nodes ./import/yelp_csv/city_nodes.csv 
---nodes ./import/yelp_csv/country_nodes.csv 
---nodes ./import/yelp_csv/review_nodes.csv 
---nodes ./import/yelp_csv/user_nodes.csv 
---relationships ./import/yelp_csv/relationships.csv  --database=yelp</pre>
+```shell
+./bin/neo4j-admin import --multiline-fields=true \
+--nodes ./import/yelp_csv/area_nodes.csv \
+--nodes ./import/yelp_csv/business_nodes.csv \
+--nodes ./import/yelp_csv/category_nodes.csv \
+--nodes ./import/yelp_csv/city_nodes.csv \
+--nodes ./import/yelp_csv/country_nodes.csv \
+--nodes ./import/yelp_csv/review_nodes.csv \
+--nodes ./import/yelp_csv/user_nodes.csv \
+--relationships ./import/yelp_csv/relationships.csv  --database=yelp
+```
 NOTE: Each file must be defined as its own parameter “--nodes”, or else the import would take the header from the first file and try to apply it to subsequent files.
 On my machine, the import took a total of 57.623 seconds:
 <pre>IMPORT DONE in 57s 623ms.
